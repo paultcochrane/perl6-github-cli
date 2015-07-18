@@ -1,0 +1,38 @@
+#!/usr/bin/env perl6
+
+use LWP::Simple;
+
+=begin pod
+
+    pgh --list-repos <username>
+
+=end pod
+
+sub MAIN($username, Bool :$list-repos) {
+    if $list-repos {
+        list-repos($username);
+    }
+}
+
+sub list-repos($username) {
+    my $base-request = "https://api.github.com/users/$username/repos?per_page=100";
+    my @headers = qqx{curl -I $base-request}.split(/\n/);
+    my $link-line = @headers.grep(/'Link:'/);
+    $link-line.subst-mutate('Link: ', '');
+    my @links = $link-line.split(/\,\s*/);
+    my $last-link = @links.grep(/'rel="last"'/);
+    my $last-page = ($last-link ~~ /\&page\=(\d+)/)[0];
+
+    my @repos;
+    for 1..$last-page -> $page-number {
+        my $repo-json = LWP::Simple.get($base-request ~ "&page=$page-number");
+        my $repo-data = from-json($repo-json);
+        push @repos, $repo-data.values;
+    }
+
+    for @repos -> $repo {
+        say $repo<clone_url>;
+    }
+}
+
+# vim: expandtab shiftwidth=4 ft=perl6
